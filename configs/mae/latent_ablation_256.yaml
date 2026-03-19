@@ -1,0 +1,60 @@
+hsdp_dim: 4
+logging:
+  project: "YOUR_WANDB_PROJECT"
+  entity: "YOUR_WANDB_ENTITY"
+  use_wandb: false
+  log_every_k: 40
+
+dataset:
+  resolution: 256
+  use_aug: true
+  use_latent: true
+  use_cache: false
+  num_classes: 1000
+  batch_size: 8192
+  eval_batch_size: 8192
+  kwargs:
+    num_workers: 8
+    pin_memory: true
+    prefetch_factor: 2
+
+
+model:
+  base_channels: 256
+  patch_size: 2
+  dropout_prob: 0.0
+  layers: [3, 4, 6, 3]
+  in_channels: 4
+  use_bf16: true
+  input_patch_size: 1
+
+optimizer:
+  lr_schedule:
+    learning_rate: 0.004
+    warmup_steps: 4000
+    lr_schedule: "const"
+    total_steps: 100000
+  weight_decay: 0.01
+  adam_b1: 0.9
+  adam_b2: 0.95
+
+train:
+  seed: 42
+  total_steps: 30000
+  save_per_step: 5000
+  eval_per_step: 2000
+  eval_samples: 5000
+  forward_dict:
+    mask_ratio_min: 0.5
+    mask_ratio_max: 0.5
+    lambda_cls: 0.0
+  eval_forward_dict:
+    mask_ratio_min: 0.5
+    mask_ratio_max: 0.5
+    lambda_cls: 0.0
+  ema_decay: 0.9995
+  keep_every: 500000
+  keep_last: 2
+  finetune_last_steps: 0
+  warmup_finetune: 1000
+  finetune_cls: 0.1
