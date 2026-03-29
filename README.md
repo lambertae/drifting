@@ -1,4 +1,4 @@
-# Generative Modeling via Drifting — JAX Release
+# Generative Modeling via Drifting — JAX & PyTorch Release
 
 <p align="center">
   <a href="http://arxiv.org/abs/2602.04770"><img src="https://img.shields.io/badge/arXiv-2602.04770-b31b1b.svg" alt="arXiv" /></a>
@@ -10,8 +10,17 @@
   <img src="assets/teaser_main.png" width="90%" alt="Drifting Models overview" />
 </p>
 
-Official JAX codebase for the ImageNet experiments of *Generative Modeling via Drifting*.
+Official codebase for the ImageNet experiments of *Generative Modeling via Drifting*.
 We provide training, inference, and pretrained weights for one-step image generation on ImageNet 256×256.
+
+This repository contains **two independent implementations** of the Drift framework:
+
+| Directory | Backend | Status |
+|-----------|---------|--------|
+| [`jax/`](jax/) | JAX + Flax (original) | Pretrained weights available |
+| [`torch/`](torch/) | PyTorch | Re-implementation |
+
+Root-level directories (`assets/`, `configs/`, `notebooks/`) are shared between both implementations.
 
 ## Generated Samples
 
@@ -60,6 +69,7 @@ Try the interactive toy demo to see the algorithm in action:
 
 ## Table of Contents
 
+- [Repository Structure](#repository-structure)
 - [Quick Start (Inference)](#quick-start-inference)
 - [Pretrained Models](#pretrained-models)
 - [Environment Setup](#environment-setup)
@@ -67,6 +77,39 @@ Try the interactive toy demo to see the algorithm in action:
 - [Training](#training)
 - [Checkpoints and Logs](#checkpoints-and-logs)
 - [Citation](#citation)
+
+## Repository Structure
+
+```
+.
+├── assets/              # Images and GIFs used in README
+├── configs/             # Shared YAML configs for gen/mae training
+│   ├── gen/
+│   └── mae/
+├── notebooks/           # Colab inference demo
+├── jax/                 # JAX + Flax implementation (original)
+│   ├── dataset/
+│   ├── models/
+│   ├── utils/
+│   ├── drift_loss.py
+│   ├── memory_bank.py
+│   ├── train.py
+│   ├── train_mae.py
+│   ├── inference.py
+│   ├── main.py
+│   └── requirements.txt
+└── torch/               # PyTorch re-implementation
+    ├── dataset/
+    ├── models/
+    ├── utils/
+    ├── drift_loss.py
+    ├── memory_bank.py
+    ├── train.py
+    ├── train_mae.py
+    ├── inference.py
+    ├── main.py
+    └── requirements.txt
+```
 
 ## Quick Start (Inference)
 
@@ -105,12 +148,29 @@ All artifacts are hosted on HuggingFace at [`Goodeat/drifting`](https://huggingf
 
 ## Environment Setup
 
-### Install Dependencies
+### JAX Implementation
+
+```bash
+conda create -n drifting-jax python=3.10 -y
+conda activate drifting-jax
+pip install -r jax/requirements.txt
+export JAX_PLATFORMS=tpu,cpu
+```
+
+### PyTorch Implementation
+
+```bash
+conda create -n drifting-torch python=3.10 -y
+conda activate drifting-torch
+pip install -r torch/requirements.txt
+```
+
+### Install Dependencies (Legacy — JAX)
 
 ```bash
 conda create -n drifting-release python=3.10 -y
 conda activate drifting-release
-pip install -r requirements.txt
+pip install -r jax/requirements.txt
 export JAX_PLATFORMS=tpu,cpu
 ```
 
@@ -137,7 +197,7 @@ imagenet/
 
 ### Path Configuration
 
-Before running training or evaluation, open `utils/env.py` and set these constants for your machine:
+Before running training or evaluation, open `jax/utils/env.py` (or `torch/utils/env.py` for PyTorch) and set these constants for your machine:
 
 - `IMAGENET_PATH`: root of the ImageNet directory (expects `train/` and `val/` subdirectories).
 - `IMAGENET_CACHE_PATH`: root of the latent cache directory (only needed for latent-generator training).
@@ -150,9 +210,10 @@ FID/PR reference stats can be downloaded from [Google Drive](https://drive.googl
 
 ### Build Latent Cache
 
-Only needed for latent-space generators.
+Only needed for latent-space generators. Run from the `jax/` directory:
 
 ```bash
+cd jax
 python -m dataset.latent \
   --data-path /path/to/imagenet \
   --target-path /path/to/latent_cache \
@@ -165,9 +226,12 @@ This encodes ImageNet images through the VAE and writes `.pt` files to `/path/to
 
 ## FID Evaluation
 
+### JAX
+
 Reproduce paper FID numbers on ImageNet-256 (50k samples, CFG=1.0):
 
 ```bash
+cd jax
 # Latent model
 python inference.py --init-from "hf://latent_L_sota" --cfg-scale 1.0 \
   --num-samples 50000 --eval-batch-size 256 --json-out results_latent.json
@@ -177,11 +241,15 @@ python inference.py --init-from "hf://pixel_L_sota" --cfg-scale 1.0 \
   --num-samples 50000 --eval-batch-size 256 --json-out results_pixel.json
 ```
 
-To stream metrics and preview images to W&B, add:
+### PyTorch
 
 ```bash
-  --use-wandb --wandb-entity YOUR_ENTITY_HERE --wandb-project YOUR_PROJECT_HERE
+cd torch
+python inference.py --init-from /path/to/params_ema --cfg-scale 1.0 \
+  --num-samples 50000 --eval-batch-size 256 --json-out results.json
 ```
+
+To stream metrics and preview images to W&B, add `--use-wandb --wandb-entity YOUR_ENTITY_HERE --wandb-project YOUR_PROJECT_HERE` to either command.
 
 Expected FID numbers match the [Pretrained Models](#pretrained-models) table above. Output JSON contains `fid`, `isc_mean`, `isc_std`, `precision`, `recall`. Precision/recall are only computed when `num_samples >= 50000`.
 
@@ -193,14 +261,33 @@ Expected FID numbers match the [Pretrained Models](#pretrained-models) table abo
 
 ## Training
 
-### Generator Training
+### JAX — Generator Training
 
 ```bash
-python main.py --gen --config configs/gen/latent_ablation.yaml --workdir runs/gen_latent_ablation
-python main.py --gen --config configs/gen/latent_sota_B.yaml   --workdir runs/gen_latent_sota_B
-python main.py --gen --config configs/gen/latent_sota_L.yaml   --workdir runs/gen_latent_sota_L
-python main.py --gen --config configs/gen/pixel_sota_B.yaml    --workdir runs/gen_pixel_sota_B
-python main.py --gen --config configs/gen/pixel_sota_L.yaml    --workdir runs/gen_pixel_sota_L
+cd jax
+python main.py --gen --config ../configs/gen/latent_ablation.yaml --workdir runs/gen_latent_ablation
+python main.py --gen --config ../configs/gen/latent_sota_B.yaml   --workdir runs/gen_latent_sota_B
+python main.py --gen --config ../configs/gen/latent_sota_L.yaml   --workdir runs/gen_latent_sota_L
+python main.py --gen --config ../configs/gen/pixel_sota_B.yaml    --workdir runs/gen_pixel_sota_B
+python main.py --gen --config ../configs/gen/pixel_sota_L.yaml    --workdir runs/gen_pixel_sota_L
+```
+
+### PyTorch — Generator Training
+
+```bash
+cd torch
+python main.py --gen --config ../configs/gen/latent_ablation.yaml --workdir runs/gen_latent_ablation
+```
+
+### JAX — Generator Training (Details)
+
+```bash
+cd jax
+python main.py --gen --config ../configs/gen/latent_ablation.yaml --workdir runs/gen_latent_ablation
+python main.py --gen --config ../configs/gen/latent_sota_B.yaml   --workdir runs/gen_latent_sota_B
+python main.py --gen --config ../configs/gen/latent_sota_L.yaml   --workdir runs/gen_latent_sota_L
+python main.py --gen --config ../configs/gen/pixel_sota_B.yaml    --workdir runs/gen_pixel_sota_B
+python main.py --gen --config ../configs/gen/pixel_sota_L.yaml    --workdir runs/gen_pixel_sota_L
 ```
 
 MAE pretrained weights are downloaded automatically from HuggingFace via the `feature.mae_path` config field. No need to train MAE unless experimenting with custom feature extractors.
@@ -220,14 +307,15 @@ FID is evaluated during training at intervals set by `train.eval_per_step`.
 
 We used 64 TPU v6e for the ablation run and 128 TPU v6e for the SOTA runs. Each host maintains its own memory bank (16 hosts for ablation, 32 for SOTA). When using fewer hosts (e.g., DDP on one H100 node = 8 hosts), increase `push_per_step` to keep the memory bank update rate sufficient.
 
-### MAE Pretraining (Optional)
+### JAX — MAE Pretraining (Optional)
 
 Pretrained MAE weights are already available at `hf://mae_latent_640`, `hf://mae_latent_256`, and `hf://mae_pixel_640`. Training code is provided for users who want to train their own:
 
 ```bash
-python main.py --config configs/mae/latent_ablation_256.yaml --workdir runs/mae_latent_ablation_256
-python main.py --config configs/mae/latent_640.yaml          --workdir runs/mae_latent_640
-python main.py --config configs/mae/pixel_640.yaml           --workdir runs/mae_pixel_640
+cd jax
+python main.py --config ../configs/mae/latent_ablation_256.yaml --workdir runs/mae_latent_ablation_256
+python main.py --config ../configs/mae/latent_640.yaml          --workdir runs/mae_latent_640
+python main.py --config ../configs/mae/pixel_640.yaml           --workdir runs/mae_pixel_640
 ```
 
 ### Using a Local MAE Checkpoint as Feature Extractor
@@ -247,6 +335,8 @@ feature:
 
 ## Checkpoints and Logs
 
+### JAX
+
 Each `--workdir <dir>` produces:
 
 ```
@@ -260,11 +350,25 @@ Each `--workdir <dir>` produces:
     └── images/*.jpg                    # Sample preview grids
 ```
 
-Local artifacts in `params_ema/` can be loaded directly for inference:
+Local artifacts in `params_ema/` can be loaded directly for inference (JAX):
 
 ```bash
+cd jax
 python inference.py --init-from /path/to/workdir --cfg-scale 1.0 \
   --num-samples 50000 --eval-batch-size 256
+```
+
+### PyTorch
+
+```
+<dir>/
+├── checkpoints/                        # torch.save() checkpoints
+├── params_ema/                         # EMA params artifact
+│   ├── ema_params.pt
+│   └── metadata.json
+└── log/
+    ├── metrics.jsonl
+    └── images/*.jpg
 ```
 
 ## Citation
