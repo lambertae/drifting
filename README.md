@@ -281,3 +281,7 @@ python inference.py --init-from /path/to/workdir --cfg-scale 1.0 \
 ## Acknowledgments
 
 We thank Hanhong Zhao for sanity checking this repository.
+
+## License
+
+This repository and the pretrained weights on [Hugging Face](https://huggingface.co/Goodeat/drifting) are released under the [MIT License](LICENSE).
