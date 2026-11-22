@@ -270,10 +270,10 @@ python inference.py --init-from /path/to/workdir --cfg-scale 1.0 \
 ## Citation
 
 ```bibtex
-@article{deng2026generative,
+@inproceedings{deng2026drifting,
   title={Generative Modeling via Drifting},
   author={Deng, Mingyang and Li, He and Li, Tianhong and Du, Yilun and He, Kaiming},
-  journal={arXiv preprint arXiv:2602.04770},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
   year={2026}
 }
 ```
